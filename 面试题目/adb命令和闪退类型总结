@@ -1,0 +1,17 @@
+adb install -r
+adb uninstall 
+adb logcat | grep fatal > info.txt
+adb shell pm clear 包名 清除缓存
+adb shell pm list packages | grep ximalaya 展示包名等信息
+adb shell pm path com.xxxxx.ximalaya 获取包的路径（在手机的哪一个位置）
+adb pull path_package adb push
+adb shell monkey -p package_name -s 8899 -v-v-v --throttle 300 300 > monkey_logcat.txt
+
+常见的闪退类型
+anr （android 无响应）在主线程中做了很多耗时的操作，导致无响应了，开辟相关的子线程去做耗时的操作
+npe 尚未实例化就进行了使用
+classnotfound
+indexoutofbounds 数组越界
+nosuchmethod
+stackoverflow 栈溢出,布局嵌套过深，有递归或者循环
+oom 内存溢出，一般都是因为有内存泄漏引起的

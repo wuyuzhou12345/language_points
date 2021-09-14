@@ -1,0 +1,181 @@
+大致原理
+Charles作为一个中间人代理，在客户端给服务器端发消息的时候，会截取客户端发送给服务器的请求，然后伪装成客户端与服务器进行通信；服务器返回数据时将截取的数据发送给客户端，伪装成服务器与客户端进行通信。
+
+这个过程其实很简单，但不同于HTTP，更安全的HTTPS能有效防止中间人攻击；Charles是如何截取HTTPS链接的呢？
+HTTPS的安全性
+
+相比HTTP，HTTPS之所以更安全的是因为其在HTTP传输层之上加了一个安全层（SSL或TLS协议）；HTTPS的安全性主要体现在下面3个方面：
+* 数据的保密性（防窃听）
+* 数据的完整性（防篡改）
+* 通信双方身份的真实性（防冒充）
+数据的保密性
+要实现数据的保密，就需要使用加密算法对数据进行加密；加密算法大致分为两类：对称加密，非对称加密；
+* 对称加密：需要对加密和解密使用相同密钥的加密算法。由于其速度快，对称性加密通常在消息发送方需要加密大量数据时使用；因为加密和解密都使用同一个密钥，把密钥传递到解密者手上时也会有风险，所以对称加密并不是很安全的；常用的对称加密算法有：DES、3DES、TDEA、Blowfish、RC2、RC4、RC5、IDEA、SKIPJACK等
+* 非对称加密，加密和解密使用不同密钥的加密算法；它使用了一对密钥，公钥和私钥；使用公钥加密的数据，利用私钥解密；使用私钥加密的数据，利用公钥解密；非对称加密使用的RSA算法（RSA原理探究），RSA的公钥和私钥其实就是一组数字，数字长度越长加密强度越大，为了不被轻易破解，数字一般是高于768位（二进制）；而RSA算法加密解密其实就是对这个比较大的数进行运算；因此RSA非对称加密要比对称加密慢很多，为了保证效率，RSA非对称加密只用于小数据；
+基于对称加密和非对称加密的优缺点，HTTPS的加密方案就是：
+* 连接建立过程：
+1. 客户端向服务器请求（发送TLS版本号、支持的加密算法、随机数C）；
+2. 服务器返回非对称加密的公钥（证书）、商定的加密算法、随机数S给客户端；
+3. 客户端验证服务器返回的证书；
+4. 证书验证通过，客户端就根据服务器返回的证书及随机数S和随机数C生成一个会话密钥（对称加密）；
+5. 客户端用服务器返回的公钥（证书）对会话密钥进行非对称加密后传输给服务器；
+6. 服务器通过私钥解密得到会话密钥；
+7. 客户端和服务器互相传输加密的握手消息来验证安全通道是否已完成；
+* 通信过程
+1. 客户端使用会话密钥对传输的数据进行对称加密传输给服务器；
+2. 服务器使用会话密钥对传输的数据进行解密；
+3. 服务器使用会话密钥对响应的数据进行对称加密传输给客户端；
+4. 客户端使用会话密钥对传输的数据进行解密；
+总的来说就是：连接建立过程使用非对称加密，后续通信过程使用对称加密；
+数据的完整性
+数据的加密，有效保证了数据不被窃听（很难得到原始的数据），但传输的数据在传输过程中有可能被篡改或替换；比如：
+传输的原始数据是123456，经过加密后数据是abcdef；客户端将abcdef这个数据传输给服务器，传输过程中中间人能拿到abcdef这个数据，但因为没有密钥很难解密出原始数据123456；但是，中间人还是能对得到的abcdef这个加密数据进行处理，比如将这个数据改为xxxxx；这样服务器得到的数据就是被篡改后的xxxxx；同样，服务器返回数据给客户端时也会被篡改；这样其实也是不安全的；
+解决方案是进行数字签名：使用Hash算法将任意长度的字符串转化为固定长度的字符串，该过程不可逆，可用来作数据完整性校验；
+具体可参考浅谈Hash
+数字签名的简要过程（服务器-->客户端为例，客户端-->服务器类似）：
+1. 服务器使用Hash算法对数据提取定长摘要
+2. 服务器使用私钥对摘要进行加密，作为数字签名
+3. 服务器将数字签名连同加密的数据一同传输给客户端
+4. 客户端使用公钥对数字签名进行解密，得到摘要A
+5. 客户端对解密后的传输数据也使用Hash算法得到定长摘要B
+6. 对比摘要A和摘要B，如果不一致则数据已被篡改
+通信双方身份的真实性
+以上加密过程，最核心的就是非对称加密的公钥和私钥；如果这个密钥都是攻击者提供的，那传输的数据在攻击者那里也是相当于裸露的；如何确保密钥是不被冒充的呢？HTTPS使用了数字证书(签名)，数字证书就是身份认证机构CA（Certificate Authority）加在数字身份证上的一个签名，证书的合法性可以向CA验证；证书的制作方法是公开的，任何人都可以自己制作证书，但只有权威的证书颁发机构的证书能通过CA认证；
+数字证书主要包含以下信息：
+* 证书颁发机构
+* 证书颁发机构签名
+* 证书绑定的服务器域名
+* 证书版本、有效期
+* 签名使用的加密算法（非对称算法，如RSA）
+* 公钥
+客户端和服务器连接过程中，收到服务器返回的证书后，会先向CA验证证书的合法性（根据证书的签名、绑定的域名等信息），如果校验不通过中止连接，并提示证书不安全。
+HTTPS抓包原理
+
+首先我们看下使用Charles抓包HTTPS的情况：
+
+正常情况下，得到的结果都是<unknown>；这是因为我们前面讲的HTTPS的安全性的作用；
+使用Charles如何解决这种情况呢？根据官方教程，需要我们使用者在手机上安装Charles根证书并设置为信任：
+
+配置好后，就能和HTTP一样抓包使用了；
+为什么手机安装了Charles根证书后就能正常抓包呢？
+其实Charles做的就是针对HTTPS的通信双方身份的真实性进行处理；
+* 当客户端和服务器建立连接时，Charles会拦截到服务器返回的证书（服务器公钥）
+* 然后动态生成一张伪造证书（Charles公钥/假公钥）发送给客户端
+* 客户端收到Charles证书后，进行验证；因为之前我们手机设置了信任，所以验证通过；（只要手机不信任这种证书，HTTPS还是能确保安全的）
+* 客户端生成会话密钥，使用Charles证书对会话密钥进行加密再传输给服务器
+* Charles拦截到客户端传输的数据，使用自己的Charles私钥进行解密得到会话密钥，然后用服务器证书公钥加密，发送给服务器。
+* 服务器用自己的私钥解密对称密钥，向“客户端”（Charles）发送响应
+* Charles拦截服务器的响应，替换成自己的证书后发送给客户端
+* 连接成功后，客户端和服务器通信，客户端对传输的数据使用会话密钥加密并使用公钥对数据摘要进行数字签名，一同传输给服务器；
+* Charles拦截到通信的数据，使用之前获得的会话密钥解密就能得到原始数据；
+* Charles同样也能篡改通信的数据：将篡改后的数据重新加密并重新生成摘要并使用之前获得的公钥进行数字签名，替换原本的签名，再传输给服务器；
+* 服务器收取到数据，按正常流程解密验证；
+* 服务器返回响应数据时，Charles也是类似拦截过程
+整个流程大致如下图：
+
+防抓包
+
+从上文可以知道，抓包主要的原理就是中间人替换了原本的证书；防抓包就可以通过针对证书的校验来实现；
+AFN有封装类似校验证书的功能，接下来主要介绍AFN+SSL Pinning的方式对证书进行校验；
+* 获取服务器的HTTPS证书，并把证书加到项目Bundle中;
+* AFN代码设置Policy
+AFSecurityPolicy *securityPolicy = [AFSecurityPolicy policyWithPinningMode: AFSSLPinningModeCertificate];
+securityPolicy.allowInvalidCertificates = YES;
+securityPolicy.validatesDomainName = NO;
+[AFHTTPSessionManager manager].securityPolicy = securityPolicy;
+AFSecurityPolicy *securityPolicy = [AFSecurityPolicy policyWithPinningMode: AFSSLPinningModeCertificate];
+这句代码中，会去Bundle中获取所有的cer证书文件：
++ (NSSet *)certificatesInBundle:(NSBundle *)bundle {
+    NSArray *paths = [bundle pathsForResourcesOfType:@"cer" inDirectory:@"."];
+
+    NSMutableSet *certificates = [NSMutableSet setWithCapacity:[paths count]];
+    for (NSString *path in paths) {
+        NSData *certificateData = [NSData dataWithContentsOfFile:path];
+        [certificates addObject:certificateData];
+    }
+
+    return [NSSet setWithSet:certificates];
+}
+AFSSLPinningMode有3种模式：
+// 验证证书的模式
+typedef NS_ENUM(NSUInteger, AFSSLPinningMode) {
+    AFSSLPinningModeNone, // 不做验证：证书是信任机构签发的就会通过，若是自己服务器生成的证书，不会通过
+    AFSSLPinningModePublicKey, // 证书验证：验证证书的域名/有效期等信息，对比服务端返回的证书和客户端返回的是否一致
+    AFSSLPinningModeCertificate, // 公钥验证（只验证证书里的公钥，不验证证书的有效期等信息）
+};
+在证书配置好及代码设置好后，再使用抓包软件就无法查看更改接口了；
+AFN的HTTPS校验核心代码如下
+- (BOOL)evaluateServerTrust:(SecTrustRef)serverTrust
+                  forDomain:(NSString *)domain {
+    if (domain && self.allowInvalidCertificates && self.validatesDomainName && (self.SSLPinningMode == AFSSLPinningModeNone || [self.pinnedCertificates count] == 0)) {
+        NSLog(@"In order to validate a domain name for self signed certificates, you MUST use pinning.");
+        return NO;
+    }
+
+    NSMutableArray *policies = [NSMutableArray array];
+    if (self.validatesDomainName) {
+        // 验证域名时，返回用于评估SSL证书链的策略对象。
+        [policies addObject:(__bridge_transfer id)SecPolicyCreateSSL(true, (__bridge CFStringRef)domain)];
+    } else {
+        // Returns a policy object for the default X.509 policy.
+        [policies addObject:(__bridge_transfer id)SecPolicyCreateBasicX509()];
+    }
+
+    // 设置验证策略
+    SecTrustSetPolicies(serverTrust, (__bridge CFArrayRef)policies);
+
+    if (self.SSLPinningMode == AFSSLPinningModeNone) {
+         // 如果支持自签名则验证通过 否则验证serverTrust是否有效、有效则验证通过
+        // SSLPinningMode=AFSSLPinningModeNone allowInvalidCertificates=YES 表示任何证书都能验证通过
+        // AFServerTrustIsValid(serverTrust) 证书是否是系统信任的证书
+        return self.allowInvalidCertificates || AFServerTrustIsValid(serverTrust);
+    } else if (!AFServerTrustIsValid(serverTrust) && !self.allowInvalidCertificates) {
+        return NO;
+    }
+
+    switch (self.SSLPinningMode) {
+        case AFSSLPinningModeNone:
+        default:
+            return NO;
+        case AFSSLPinningModeCertificate: {
+            NSMutableArray *pinnedCertificates = [NSMutableArray array];
+            for (NSData *certificateData in self.pinnedCertificates) {
+                [pinnedCertificates addObject:(__bridge_transfer id)SecCertificateCreateWithData(NULL, (__bridge CFDataRef)certificateData)];
+            }
+            // 设置了参与校验锚点证书之后，假如验证的数字证书是这个锚点证书的子节点，即验证的数字证书是由锚点证书对应CA或子CA签发的，或是该证书本身，则信任该证书
+            SecTrustSetAnchorCertificates(serverTrust, (__bridge CFArrayRef)pinnedCertificates);
+
+            if (!AFServerTrustIsValid(serverTrust)) {
+                return NO;
+            }
+
+            // obtain the chain after being validated, which *should* contain the pinned certificate in the last position (if it's the Root CA)
+            // 服务器证书和客户端的是否相同，如果有一个相同则通过
+            NSArray *serverCertificates = AFCertificateTrustChainForServerTrust(serverTrust);
+
+            for (NSData *trustChainCertificate in [serverCertificates reverseObjectEnumerator]) {
+                if ([self.pinnedCertificates containsObject:trustChainCertificate]) {
+                    return YES;
+                }
+            }
+
+            return NO;
+        }
+        case AFSSLPinningModePublicKey: {
+            // 比较证书当中公钥(PublicKey)部分来进行验证，通过SecTrustCopyPublicKey方法获取本地证书和服务器证书，然后进行比较，如果有一个相同，则通过
+            NSUInteger trustedPublicKeyCount = 0;
+            NSArray *publicKeys = AFPublicKeyTrustChainForServerTrust(serverTrust);
+
+            for (id trustChainPublicKey in publicKeys) {
+                for (id pinnedPublicKey in self.pinnedPublicKeys) {
+                    if (AFSecKeyIsEqualToKey((__bridge SecKeyRef)trustChainPublicKey, (__bridge SecKeyRef)pinnedPublicKey)) {
+                        trustedPublicKeyCount += 1;
+                    }
+                }
+            }
+            return trustedPublicKeyCount > 0;
+        }
+    }
+
+    return NO;
+}
