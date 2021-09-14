@@ -28,5 +28,5 @@ for k,v in dict_result.items():
             max_content = k
             max_times = v
 
-print(max_content)
-print(max_times)
+# print(max_content)
+# print(max_times)
