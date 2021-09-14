@@ -1,0 +1,70 @@
+一次远程的调用经历了一下10个步骤：
+1.调用客户端以本地方式调用远程服务
+2.client stub将请求（方法和参数）组装成网络消息
+3.client stub找得到服务器地址，将消息传送到远程主机
+4.server stub得到传送过来的请求，进行解码
+5.server stub调用本地服务，处理请求
+6.本地服务处理请求，并将处理结果返回给server stub
+7.server stub将请求处理结果组装成网络消息
+8.server stub找到客户端地址，将请求处理结果传送给客户端
+9.client stub接收到请求处理结果，进行解码
+10.客户端最终接收到请求处理结果
+
+RPC框架的目的就是将2-9步骤封装起来，对使用者透明，客户端只需要执行第一步调用接口，然后就能够得到结果。
+
+
+RPC和HTTP的存在重大不同的是：
+HTTP请求是使用具有标准语义的通用的接口定向到资源的，
+这些语义能够被中间组件和提供服务的来源机器进行解释，
+RPC的机制是根据语言的API(language API)来定义的，
+而不是根据基于网络的应用来定义的。
+
+传输协议:
+RPC:可以基于TCP协议，也可以基于HTTP协议
+HTTP:基于HTTP协议，传输协议是TCP
+
+传输效率:
+RPC:使用自定义的TCP协议，可以让请求报文体积更小，或者使用HTTP2协议，也可以很好的减少报文的体积，提高传输效率
+HTTP:如果是基于HTTP1.1的协议，请求中会包含很多无用的内容，如果是基于HTTP2.0，那么简单的封装以下是可以作为一个RPC来使用的，这时标准RPC框架更多的是服务治理
+
+性能消耗:
+RPC:可以基于thrift实现高效的二进制传输，也支持压缩、JSON传输等协议
+HTTP:大部分是通过JSON来实现的，字节大小和序列化耗时都比thrift要更消耗性能
+
+总结：RPC主要用于公司内部的服务调用，性能消耗低，传输效率高，服务治理方便。
+HTTP主要用于对外的异构环境，浏览器接口调用，APP接口调用，第三方接口调用等。
+
+
+Thrift是一种接口描述语言和二进制通讯协议，它被用来定义和创建跨语言的服务。
+它被当作一个远程过程调用（RPC）框架来使用，是由Facebook为“大规模跨语言服务开发”而开发的。
+支持C++、Java、Python、PHP、Ruby、Erlang、Perl、Haskell、C#、Cocoa、JavaScript、Node.js、Smalltalk、and Ocaml编程语言。
+
+TProtocol主要负责结构化数据组装成Message
+TTransport负责以字节流方式发送和接收Message
+底层IO模块，负责实际的数据传输，包括Socket，文件，或者压缩数据流等
+
+
+可以得出结论，使用Thrift只需要做三件事：
+1.通过IDL定义数据结构和服务
+2.利用代码生成工具生成代码
+3.编写你的业务逻辑
+
+支持众多通讯协议：
+TBinaryProtocol – 一种简单的二进制格式，简单，但没有为空间效率而优化。比文本协议处理起来更快，但更难于调试。
+TCompactProtocol – 更紧凑的二进制格式，处理起来通常同样高效。
+TDebugProtocol – 一种人类可读的文本格式，用来协助调试。
+TDenseProtocol – 与TCompactProtocol类似，将传输数据的元信息剥离。
+TJSONProtocol – 使用JSON对数据编码。
+TSimpleJSONProtocol – 一种只写协议，它不能被Thrift解析，因为它使用JSON时丢弃了元数据。适合用脚本语言来解析。
+支持的传输协议：
+TFileTransport – 该传输协议会写文件。
+TFramedTransport – 当使用一个非阻塞服务器时，要求使用这个传输协议。它按帧来发送数据，其中每一帧的开头是长度信息。
+TMemoryTransport – 使用存储器映射输入输出。（Java的实现使用了一个简单的ByteArrayOutputStream。）
+TSocket – 使用阻塞的套接字I/O来传输。
+TZlibTransport – 用zlib执行压缩。用于连接另一个传输协议。
+Thrift还提供众多的服务器，包括：
+TNonblockingServer – 一个多线程服务器，它使用非阻塞I/O（Java的实现使用了NIO通道）。TFramedTransport必须跟这个服务器配套使用。
+TSimpleServer – 一个单线程服务器，它使用标准的阻塞I/O。测试时很有用。
+TThreadPoolServer – 一个多线程服务器，它使用标准的阻塞I/O。
+
+
