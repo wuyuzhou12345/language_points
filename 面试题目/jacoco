@@ -1,0 +1,66 @@
+jacoco原理
+即是通过修改class文件的字节码来进行代码覆盖率统计。即在原有class字节码中的制定位置插入探针字节码，形成新的字节码指令流。jacoco使用的是asm字节码框架对字节码进行修改。jacoco的探针实际是一个布尔值，当代码执行到探针的位置时，将其设置为true，该探针前面的代码会被认为执行过，然后对该部分代码对应的html文件中的css样式进行染色（红色表示未覆盖，绿色表示已覆盖，黄色表示部分覆盖）形成最终的覆盖率报告
+
+插桩模式
+on-the-fly 运行时插桩
+offline 编译时插桩
+On-The-Fly插桩 Java Agent
+* JVM中通过-javaagent参数指定特定的jar文件启动Instrumentation的代理程序
+* 代理程序在每装载一个class文件前判断是否已经转换修改了该文件，如果没有则需要将探针插入class文件中。
+* 代码覆盖率就可以在JVM执行代码的时候实时获取。
+* 典型代表：Jacoco
+On-The-Fly插桩 Class Loader
+* 自定义classloader实现自己的类装载策略，在类加载之前将探针插入class文件中
+* 典型代表：Emma
+Offine插桩
+* 在测试之前先对文件进行插桩，生成插过桩的class文件或者jar包，执行插过桩的class文件或者jar包之后，会生成覆盖率信息到文件，最后统一对覆盖率信息进行处理，并生成报告。
+* Offline插桩又分为两种：
+* Replace：修改字节码生成新的class文件
+* Inject：在原有字节码文件上进行修改
+* 典型代表：Cobertura
+On-The-Fly和Offine比较
+* On-The-Fly模式更加方便的获取代码覆盖率，无需提前进行字节码插桩，可以实时获取代码覆盖率信息
+* Offline模式适用于以下场景：
+* 运行环境不支持java agent
+* 部署环境不允许设置JVM参数
+* 字节码需要被转换成其他虚拟机字节码，如Android Dalvik VM
+* 动态修改字节码过程中和其他agent冲突
+* 无法自定义用户加载类
+
+
+On-The-Fly模式优点在于无需修改源代码，可以在系统不停机的情况下，实时收集代码覆盖率信息。Offine模式优点在于系统启动不需要额外开启代理，但是只能在系统停机的情况下才能获取代码覆盖率
+
+
+1.先上官网下载相关的jar包和文件（解压后的目录如下）
+https://www.jacoco.org/jacoco/index.html
+jacoco api
+https://www.jacoco.org/jacoco/trunk/doc/api.html
+
+
+
+
+2.对于自己搭建的项目启动的时候加上vm options的相关参数
+
+如：-javaagent:/Users/nali/Downloads/jacoco-0.8.6/lib/jacocoagent.jar=includes=*,output=tcpserver,port=9100,address=192.168.124.5
+
+注：此处使用了tcpserver的方式进行启动，它的好处是不用关闭服务，随时可以dump，这也是最常用的启动方式
+includes — 对于插桩的包进行过滤，*代表所有的class都要进行插桩
+output  —   表示启动项目的两种方案
+port — jacoco开启tcpserver的端口，dump的时候也要执行相同的端口
+address — jacoco对外开放的tcpserver的访问地址，地址为127.0.0.1的时候只能在这台机器上进行dump数据
+地址为实际ip时候，可以在任意一台机器上进行数据dump
+destfile — exec文件的生成目录
+append — 默认为true，执行dump的时候在原文件末尾进行追加，如果是false，执行dump的时候会直接覆盖原文件
+
+
+3.执行相关的自动化接口case
+
+4.在另外一台机器上
+git clone git@gitlab.ximalaya.com:luying.zhou/springbootdemo.git
+cd springbootdemo
+mvn compile (注意这边一定要进行编译，不然执行下面的 report命令的时候会报错)
+对于染色的数据进行dump，生成jacoco.exec文件
+java -jar ../lib/jacococli.jar dump --address 192.168.124.5 --port 9100 --destfile ./jacoco5.exec --reset
+
+对于dump的数据进行报告生成
+java -jar ../lib/jacococli.jar report ./jacoco5.exec --classfiles target/classes --sourcefiles src/main/java --encoding utf-8 --html jacoReport5

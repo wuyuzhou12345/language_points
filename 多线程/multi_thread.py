@@ -7,7 +7,6 @@ class ProjectThread(threading.Thread):
         self.uat_url = uat_url
         self.prod_url = prod_url
 
-
     def run(self):
         '''
         :return: execute
