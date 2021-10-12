@@ -1,5 +1,6 @@
 import functools
 import time
+
 def logger(func):
     @functools.wraps(func)
     def wrapper(*args,**kwargs):
